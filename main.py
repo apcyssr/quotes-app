@@ -61,3 +61,4 @@ from gradio_app import demo
 import gradio as gr
 
 app = gr.mount_gradio_app(app, demo, path="/gradio")
+
