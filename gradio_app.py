@@ -1,11 +1,13 @@
 import gradio as gr
 import sqlite3
 import pandas as pd
-from wordcloud import WordCloud
 import matplotlib.pyplot as plt
+from wordcloud import WordCloud
+from collections import Counter
+import re
 
 # -----------------------
-# DATABASE FUNCTIONS
+# DATABASE
 # -----------------------
 def load_data():
     conn = sqlite3.connect("quotes.db")
@@ -13,6 +15,22 @@ def load_data():
     conn.close()
     return df
 
+
+# -----------------------
+# KPI
+# -----------------------
+def get_kpis():
+    df = load_data()
+    total_quotes = len(df)
+    total_authors = df["author"].nunique()
+    total_categories = df["category"].nunique()
+
+    return total_quotes, total_authors, total_categories
+
+
+# -----------------------
+# SEARCH / FILTER
+# -----------------------
 def search_quotes(keyword):
     df = load_data()
     return df[df["text"].str.contains(keyword, case=False, na=False)]
@@ -20,6 +38,57 @@ def search_quotes(keyword):
 def filter_author(author):
     df = load_data()
     return df[df["author"] == author]
+
+def get_authors():
+    df = load_data()
+    return sorted(df["author"].dropna().unique())
+
+
+# -----------------------
+# VISUALIZATION
+# -----------------------
+def plot_top_authors():
+    df = load_data()
+    counts = df["author"].value_counts().head(10)
+
+    plt.figure()
+    counts.plot(kind="bar")
+    plt.title("Top 10 Authors")
+    plt.xlabel("Author")
+    plt.ylabel("Count")
+    plt.xticks(rotation=45)
+    return plt
+
+
+def plot_category_dist():
+    df = load_data()
+    counts = df["category"].value_counts()
+
+    plt.figure()
+    counts.plot(kind="bar")
+    plt.title("Category Distribution")
+    plt.xlabel("Category")
+    plt.ylabel("Count")
+    plt.xticks(rotation=45)
+    return plt
+
+
+def plot_word_freq():
+    df = load_data()
+    text = " ".join(df["text"].tolist())
+
+    words = re.findall(r'\b\w+\b', text.lower())
+    common = Counter(words).most_common(10)
+
+    labels = [w[0] for w in common]
+    values = [w[1] for w in common]
+
+    plt.figure()
+    plt.bar(labels, values)
+    plt.title("Top 10 Words")
+    plt.xticks(rotation=45)
+    return plt
+
 
 def wordcloud_plot():
     df = load_data()
@@ -32,158 +101,89 @@ def wordcloud_plot():
     plt.axis("off")
     return plt
 
-def get_authors():
-    df = load_data()
-    return list(df["author"].dropna().unique())
-
 
 # -----------------------
-# LANGUAGE DICTIONARY
-# -----------------------
-LANG = {
-    "en": {
-        "title": "🌟 Quotes Portfolio Dashboard",
-        "desc": "Explore, search, and analyze quotes",
-        "load": "Load Data",
-        "search": "Search",
-        "filter": "Filter",
-        "wordcloud": "Generate WordCloud",
-        "keyword": "Keyword",
-        "author": "Select Author",
-        "tab_all": "📄 All Quotes",
-        "tab_search": "🔍 Search",
-        "tab_filter": "👤 Filter by Author",
-        "tab_wc": "☁️ WordCloud"
-    },
-    "th": {
-        "title": "🌟 แดชบอร์ดคำคม",
-        "desc": "ค้นหา วิเคราะห์ และดูข้อมูลคำคม",
-        "load": "โหลดข้อมูล",
-        "search": "ค้นหา",
-        "filter": "กรอง",
-        "wordcloud": "สร้าง WordCloud",
-        "keyword": "คำค้นหา",
-        "author": "เลือกผู้เขียน",
-        "tab_all": "📄 คำคมทั้งหมด",
-        "tab_search": "🔍 ค้นหา",
-        "tab_filter": "👤 ผู้เขียน",
-        "tab_wc": "☁️ เวิร์ดคลาวด์"
-    },
-    "kr": {
-        "title": "🌟 명언 대시보드",
-        "desc": "명언을 검색하고 분석하세요",
-        "load": "데이터 불러오기",
-        "search": "검색",
-        "filter": "필터",
-        "wordcloud": "워드클라우드 생성",
-        "keyword": "검색어",
-        "author": "작성자 선택",
-        "tab_all": "📄 전체",
-        "tab_search": "🔍 검색",
-        "tab_filter": "👤 작성자",
-        "tab_wc": "☁️ 워드클라우드"
-    }
-}
-
-
-# -----------------------
-# BUILD UI
-# -----------------------
-def build_ui(lang_code):
-    t = LANG[lang_code]
-
-    with gr.Blocks() as ui:
-        gr.Markdown(f"# {t['title']}")
-        gr.Markdown(t["desc"])
-
-        with gr.Tab(t["tab_all"]):
-            table = gr.Dataframe()
-            btn_load = gr.Button(t["load"])
-            btn_load.click(load_data, outputs=table)
-
-        with gr.Tab(t["tab_search"]):
-            keyword = gr.Textbox(label=t["keyword"])
-            search_btn = gr.Button(t["search"])
-            search_output = gr.Dataframe()
-            search_btn.click(search_quotes, inputs=keyword, outputs=search_output)
-
-        with gr.Tab(t["tab_filter"]):
-            author_dropdown = gr.Dropdown(choices=get_authors(), label=t["author"])
-            filter_btn = gr.Button(t["filter"])
-            filter_output = gr.Dataframe()
-            filter_btn.click(filter_author, inputs=author_dropdown, outputs=filter_output)
-
-        with gr.Tab(t["tab_wc"]):
-            wc_btn = gr.Button(t["wordcloud"])
-            wc_plot = gr.Plot()
-            wc_btn.click(wordcloud_plot, outputs=wc_plot)
-
-    return ui
-
-
-# -----------------------
-# MAIN APP (LANG + THEME)
+# UI
 # -----------------------
 def create_app():
     with gr.Blocks() as app:
 
-        lang = gr.State("en")
+        gr.Markdown("# 📊 Quotes Analytics Dashboard")
+        gr.Markdown("Explore, search, and analyze quotes in real-time")
 
-        t = LANG["en"]
+        # -----------------------
+        # KPI Section
+        # -----------------------
+        with gr.Row():
+            total_q = gr.Number(label="📌 Total Quotes")
+            total_a = gr.Number(label="🧑 Authors")
+            total_c = gr.Number(label="🏷 Categories")
 
-        title = gr.Markdown(f"# {t['title']}")
-        desc = gr.Markdown(t["desc"])
+        btn_kpi = gr.Button("🔄 Refresh KPIs")
+        btn_kpi.click(get_kpis, outputs=[total_q, total_a, total_c])
+
+        gr.Markdown("---")
+
+        # -----------------------
+        # Data Table
+        # -----------------------
+        gr.Markdown("## 📄 Dataset")
+
+        table = gr.Dataframe()
+        btn_load = gr.Button("Load Data")
+        btn_load.click(load_data, outputs=table)
+
+        gr.Markdown("---")
+
+        # -----------------------
+        # Search & Filter
+        # -----------------------
+        gr.Markdown("## 🔍 Search & Filter")
 
         with gr.Row():
-            lang_dropdown = gr.Dropdown(
-                choices=[("English","en"),("ไทย","th"),("한국어","kr")],
-                value="en",
-                label="🌐 Language"
-            )
+            keyword = gr.Textbox(label="Keyword")
+            search_btn = gr.Button("Search")
 
-        # UI Components
-        with gr.Tab(t["tab_all"]):
-            table = gr.Dataframe()
-            btn_load = gr.Button(t["load"])
-            btn_load.click(load_data, outputs=table)
+        search_output = gr.Dataframe()
+        search_btn.click(search_quotes, inputs=keyword, outputs=search_output)
 
-        with gr.Tab(t["tab_search"]):
-            keyword = gr.Textbox(label=t["keyword"])
-            search_btn = gr.Button(t["search"])
-            search_output = gr.Dataframe()
-            search_btn.click(search_quotes, inputs=keyword, outputs=search_output)
+        with gr.Row():
+            author_dropdown = gr.Dropdown(choices=get_authors(), label="Author")
+            filter_btn = gr.Button("Filter")
 
-        with gr.Tab(t["tab_filter"]):
-            author_dropdown = gr.Dropdown(choices=get_authors(), label=t["author"])
-            filter_btn = gr.Button(t["filter"])
-            filter_output = gr.Dataframe()
-            filter_btn.click(filter_author, inputs=author_dropdown, outputs=filter_output)
+        filter_output = gr.Dataframe()
+        filter_btn.click(filter_author, inputs=author_dropdown, outputs=filter_output)
 
-        with gr.Tab(t["tab_wc"]):
-            wc_btn = gr.Button(t["wordcloud"])
-            wc_plot = gr.Plot()
-            wc_btn.click(wordcloud_plot, outputs=wc_plot)
+        gr.Markdown("---")
 
-        # 🔥 เปลี่ยนภาษา (update text แทน)
-        def update_lang(lang_code):
-            t = LANG[lang_code]
-            return (
-                f"# {t['title']}",
-                t["desc"],
-                t["load"],
-                t["search"],
-                t["filter"],
-                t["wordcloud"]
-            )
+        # -----------------------
+        # Charts
+        # -----------------------
+        gr.Markdown("## 📈 Analytics")
 
-        lang_dropdown.change(
-            update_lang,
-            inputs=lang_dropdown,
-            outputs=[title, desc, btn_load, search_btn, filter_btn, wc_btn]
-        )
+        with gr.Row():
+            btn_author = gr.Button("Top Authors")
+            btn_category = gr.Button("Category Distribution")
+
+        with gr.Row():
+            plot1 = gr.Plot()
+            plot2 = gr.Plot()
+
+        btn_author.click(plot_top_authors, outputs=plot1)
+        btn_category.click(plot_category_dist, outputs=plot2)
+
+        with gr.Row():
+            btn_word = gr.Button("Top Words")
+            btn_wc = gr.Button("WordCloud")
+
+        with gr.Row():
+            plot3 = gr.Plot()
+            plot4 = gr.Plot()
+
+        btn_word.click(plot_word_freq, outputs=plot3)
+        btn_wc.click(wordcloud_plot, outputs=plot4)
 
     return app
-
 
 
 demo = create_app()
