@@ -129,7 +129,7 @@ def create_app():
         # -----------------------
         gr.Markdown("## 📄 Dataset")
 
-        table = gr.Dataframe()
+        table = gr.Dataframe(value=load_data())
         btn_load = gr.Button("Load Data")
         btn_load.click(load_data, outputs=table)
 
