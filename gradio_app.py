@@ -5,7 +5,9 @@ import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 from collections import Counter
 import re
-
+from collections import Counter
+from wordcloud import STOPWORDS
+import re
 # -----------------------
 # DATABASE
 # -----------------------
@@ -75,30 +77,75 @@ def plot_category_dist():
 
 def plot_word_freq():
     df = load_data()
-    text = " ".join(df["text"].tolist())
 
-    words = re.findall(r'\b\w+\b', text.lower())
-    common = Counter(words).most_common(10)
+    text = " ".join(df["text"].astype(str))
+
+    # แยกคำ
+    words = re.findall(r'\b[a-zA-Z]+\b', text.lower())
+
+    # stopwords พื้นฐาน
+    stop_words = set(STOPWORDS)
+
+    # เพิ่มคำที่ไม่ต้องการเอง
+    custom_stopwords = {
+        "is", "am", "are", "i", "you",
+        "he", "she", "it", "they",
+        "we", "to", "of", "and",
+        "in", "on", "for", "this",
+        "that", "my", "your"
+    }
+
+    stop_words.update(custom_stopwords)
+
+    # กรองคำ
+    filtered_words = [
+        word for word in words
+        if word not in stop_words and len(word) > 2
+    ]
+
+    # นับความถี่
+    common = Counter(filtered_words).most_common(10)
 
     labels = [w[0] for w in common]
     values = [w[1] for w in common]
 
-    plt.figure()
+    # plot
+    plt.figure(figsize=(10,5))
     plt.bar(labels, values)
-    plt.title("Top 10 Words")
-    plt.xticks(rotation=45)
+    plt.title("Top 10 Keywords")
+    plt.xticks(rotation=30)
+
     return plt
 
 
 def wordcloud_plot():
     df = load_data()
-    text = " ".join(df["text"].tolist())
 
-    wc = WordCloud(width=800, height=400, background_color="white").generate(text)
+    text = " ".join(df["text"].astype(str))
 
-    plt.figure()
+    stop_words = set(STOPWORDS)
+
+    custom_stopwords = {
+        "is", "am", "are", "i", "you",
+        "he", "she", "it", "they",
+        "we", "to", "of", "and",
+        "in", "on", "for", "this",
+        "that", "my", "your"
+    }
+
+    stop_words.update(custom_stopwords)
+
+    wc = WordCloud(
+        width=1000,
+        height=500,
+        background_color="white",
+        stopwords=stop_words
+    ).generate(text)
+
+    plt.figure(figsize=(12,6))
     plt.imshow(wc)
     plt.axis("off")
+
     return plt
 
 
